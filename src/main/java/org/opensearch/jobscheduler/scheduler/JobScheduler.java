@@ -39,12 +39,14 @@ public class JobScheduler {
 
     private ThreadPool threadPool;
     private ScheduledJobInfo scheduledJobInfo;
+    private DeScheduledJobInfo deScheduledJobInfo;
     private Clock clock;
     private final LockService lockService;
 
     public JobScheduler(ThreadPool threadPool, final LockService lockService) {
         this.threadPool = threadPool;
         this.scheduledJobInfo = new ScheduledJobInfo();
+        this.deScheduledJobInfo = new DeScheduledJobInfo();
         this.clock = Clock.systemDefaultZone();
         this.lockService = lockService;
     }
@@ -57,6 +59,11 @@ public class JobScheduler {
     @VisibleForTesting
     public ScheduledJobInfo getScheduledJobInfo() {
         return this.scheduledJobInfo;
+    }
+
+    @VisibleForTesting
+    public DeScheduledJobInfo getDeScheduledJobInfo() {
+        return this.deScheduledJobInfo;
     }
 
     public Set<String> getScheduledJobIds(String indexName) {
@@ -81,6 +88,7 @@ public class JobScheduler {
             if (jobInfo == null) {
                 jobInfo = new JobSchedulingInfo(indexName, docId, scheduledJobParameter);
                 this.scheduledJobInfo.addJob(indexName, docId, jobInfo);
+                this.deScheduledJobInfo.removeJob(indexName, docId);
             }
             if (jobInfo.getScheduledCancellable() != null) {
                 return true;
@@ -122,6 +130,8 @@ public class JobScheduler {
         if (scheduledCancellable != null && !scheduledCancellable.cancel()) {
             return false;
         }
+        log.info("Adding to DeScheduled jobs id {} for index {} .", id, indexName);
+        this.deScheduledJobInfo.addJob(indexName, id, jobInfo);
         this.scheduledJobInfo.removeJob(indexName, id);
 
         return true;

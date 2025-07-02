@@ -16,7 +16,7 @@ import org.opensearch.core.xcontent.ToXContentFragment;
 import org.opensearch.core.xcontent.XContentBuilder;
 
 import java.io.IOException;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class GetScheduledInfoNodeResponse extends BaseNodeResponse implements ToXContentFragment {
@@ -25,7 +25,7 @@ public class GetScheduledInfoNodeResponse extends BaseNodeResponse implements To
 
     public GetScheduledInfoNodeResponse(DiscoveryNode node) {
         super(node);
-        this.scheduledJobInfo = new HashMap<>();
+        this.scheduledJobInfo = new LinkedHashMap<>();
     }
 
     public GetScheduledInfoNodeResponse(StreamInput in) throws IOException {

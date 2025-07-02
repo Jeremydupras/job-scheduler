@@ -54,7 +54,9 @@ public class GetScheduledInfoResponse extends BaseNodesResponse<GetScheduledInfo
             builder.startArray("nodes");
             for (GetScheduledInfoNodeResponse nodeResponse : getNodes()) {
                 nodeResponse.toXContent(builder, params);
-                totalJobs = totalJobs + (int) nodeResponse.getScheduledJobInfo().get("total_jobs");
+                totalJobs = totalJobs + (int) nodeResponse.getScheduledJobInfo().get("total_jobs") + (int) nodeResponse
+                    .getScheduledJobInfo()
+                    .get("total_descheduled_jobs");
             }
             builder.endArray();
         } else {
@@ -62,19 +64,9 @@ public class GetScheduledInfoResponse extends BaseNodesResponse<GetScheduledInfo
             Set<String> seenJobIds = new HashSet<>();
             for (GetScheduledInfoNodeResponse nodeResponse : getNodes()) {
                 Object jobs = nodeResponse.getScheduledJobInfo().get("jobs");
-                if (jobs instanceof List) {
-                    for (Object job : (List<?>) jobs) {
-                        if (job instanceof Map) {
-                            @SuppressWarnings("unchecked")
-                            Map<String, Object> jobMap = (Map<String, Object>) job;
-                            String jobId = (String) jobMap.get("job_id");
-                            if (jobId != null && seenJobIds.add(jobId)) {
-                                builder.value(job);
-                                totalJobs++;
-                            }
-                        }
-                    }
-                }
+                Object descheduledJobs = nodeResponse.getScheduledJobInfo().get("descheduled_jobs");
+                totalJobs += getTotalJobs(builder, seenJobIds, jobs);
+                totalJobs += getTotalJobs(builder, seenJobIds, descheduledJobs);
             }
             builder.endArray();
         }
@@ -90,6 +82,24 @@ public class GetScheduledInfoResponse extends BaseNodesResponse<GetScheduledInfo
         builder.field("total_jobs", totalJobs);
         builder.endObject();
         return builder;
+    }
+
+    private int getTotalJobs(XContentBuilder builder, Set<String> seenJobIds, Object jobs) throws IOException {
+        int count = 0;
+        if (jobs instanceof List) {
+            for (Object job : (List<?>) jobs) {
+                if (job instanceof Map) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> jobMap = (Map<String, Object>) job;
+                    String jobId = (String) jobMap.get("job_id");
+                    if (jobId != null && seenJobIds.add(jobId)) {
+                        builder.value(job);
+                        count++;
+                    }
+                }
+            }
+        }
+        return count;
     }
 
     public Map<String, Map<String, Object>> getScheduledJobInfoByNode() {
