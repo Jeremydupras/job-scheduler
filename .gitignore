@@ -12,4 +12,3 @@ build
 bin/
 .classpath
 .vscode
-sample-extension-plugin/src/test/resources/
