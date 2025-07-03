@@ -15,13 +15,16 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.nodes.TransportNodesAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.jobscheduler.ScheduledJobProvider;
 import org.opensearch.jobscheduler.scheduler.JobScheduler;
 import org.opensearch.jobscheduler.scheduler.JobSchedulingInfo;
 import org.opensearch.jobscheduler.scheduler.ScheduledJobInfo;
+import org.opensearch.jobscheduler.spi.LockModel;
 import org.opensearch.jobscheduler.spi.schedule.CronSchedule;
 import org.opensearch.jobscheduler.spi.schedule.IntervalSchedule;
+import org.opensearch.jobscheduler.spi.utils.LockService;
 import org.opensearch.jobscheduler.utils.JobDetailsService;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -36,6 +39,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.ArrayList;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 public class TransportGetScheduledInfoAction extends TransportNodesAction<
     GetScheduledInfoRequest,
@@ -46,6 +53,7 @@ public class TransportGetScheduledInfoAction extends TransportNodesAction<
     private static final Logger log = LogManager.getLogger(JobScheduler.class);
     private final JobScheduler jobScheduler;
     private final JobDetailsService jobDetailsService;
+    private final LockService lockService;
 
     @Inject
     public TransportGetScheduledInfoAction(
@@ -54,7 +62,8 @@ public class TransportGetScheduledInfoAction extends TransportNodesAction<
         TransportService transportService,
         ActionFilters actionFilters,
         JobScheduler jobScheduler,
-        JobDetailsService jobDetailsService
+        JobDetailsService jobDetailsService,
+        LockService lockService
     ) {
         super(
             GetScheduledInfoAction.NAME,
@@ -69,6 +78,7 @@ public class TransportGetScheduledInfoAction extends TransportNodesAction<
         );
         this.jobScheduler = jobScheduler;
         this.jobDetailsService = jobDetailsService;
+        this.lockService = lockService;
     }
 
     @Override
@@ -88,6 +98,32 @@ public class TransportGetScheduledInfoAction extends TransportNodesAction<
     @Override
     protected GetScheduledInfoNodeResponse newNodeResponse(StreamInput in) throws IOException {
         return new GetScheduledInfoNodeResponse(in);
+    }
+
+    private void addLockInfo(Map<String, Object> jobDetails, String indexName, String jobId) {
+        // Check if lock index exists first
+        if (!lockService.lockIndexExist()) {
+            jobDetails.put("active_lock", false);
+            return;
+        }
+
+        String lockId = LockModel.generateLockId(indexName, jobId);
+        try {
+            CompletableFuture<LockModel> lockFuture = new CompletableFuture<>();
+            lockService.findLock(lockId, ActionListener.wrap(lockFuture::complete, lockFuture::completeExceptionally));
+
+            LockModel lock = lockFuture.get(1, TimeUnit.SECONDS);
+            if (lock != null && !lock.isReleased() && !lock.isExpired()) {
+                jobDetails.put("active_lock", true);
+                jobDetails.put("lock_acquired_time", lock.getLockTime().toString());
+                jobDetails.put("lock_expires_at", lock.getLockTime().plusSeconds(lock.getLockDurationSeconds()).toString());
+            } else {
+                jobDetails.put("active_lock", false);
+            }
+        } catch (Exception e) {
+            log.debug("Error checking lock for job {}: {}", jobId, e.getMessage());
+            jobDetails.put("active_lock", false);
+        }
     }
 
     private List<Map<String, Object>> buildJobInfoResponse(
@@ -125,12 +161,12 @@ public class TransportGetScheduledInfoAction extends TransportNodesAction<
 
                     // Add execution information
                     if (jobInfo.getActualPreviousExecutionTime() != null) {
-                        jobDetails.put("last_execution_time", jobInfo.getActualPreviousExecutionTime());
+                        jobDetails.put("last_execution_time", jobInfo.getActualPreviousExecutionTime().toString());
                     } else {
                         jobDetails.put("last_execution_time", "none");
                     }
                     if (jobInfo.getExpectedPreviousExecutionTime() != null) {
-                        jobDetails.put("last_expected_execution_time", jobInfo.getExpectedPreviousExecutionTime());
+                        jobDetails.put("last_expected_execution_time", jobInfo.getExpectedPreviousExecutionTime().toString());
                     } else {
                         jobDetails.put("last_expected_execution_time", "none");
                     }
@@ -184,6 +220,9 @@ public class TransportGetScheduledInfoAction extends TransportNodesAction<
                             ? jobInfo.getJobParameter().getLockDurationSeconds()
                             : "no_lock"
                     );
+
+                    // Add active lock information
+                    addLockInfo(jobDetails, indexName, jobId);
 
                     jobs.add(jobDetails);
                 }
