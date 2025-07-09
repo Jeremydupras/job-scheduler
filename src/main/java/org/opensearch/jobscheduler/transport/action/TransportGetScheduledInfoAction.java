@@ -284,8 +284,6 @@ public class TransportGetScheduledInfoAction extends TransportNodesAction<
             // If any exception occurs, return empty jobs lists
             scheduledJobInfo.put("jobs", new ArrayList<>());
             scheduledJobInfo.put("total_jobs", 0);
-            scheduledJobInfo.put("descheduled_jobs", new ArrayList<>());
-            scheduledJobInfo.put("total_descheduled_jobs", 0);
             scheduledJobInfo.put("error", e.getMessage());
         }
 
