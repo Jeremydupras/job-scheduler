@@ -39,12 +39,14 @@ public class JobScheduler {
 
     private ThreadPool threadPool;
     private ScheduledJobInfo scheduledJobInfo;
+    private ScheduledJobInfo descheduledJobInfo;
     private Clock clock;
     private final LockService lockService;
 
     public JobScheduler(ThreadPool threadPool, final LockService lockService) {
         this.threadPool = threadPool;
         this.scheduledJobInfo = new ScheduledJobInfo();
+        this.descheduledJobInfo = new ScheduledJobInfo();
         this.clock = Clock.systemDefaultZone();
         this.lockService = lockService;
     }
@@ -57,6 +59,10 @@ public class JobScheduler {
     @VisibleForTesting
     public ScheduledJobInfo getScheduledJobInfo() {
         return this.scheduledJobInfo;
+    }
+
+    public ScheduledJobInfo getDescheduledJobInfo() {
+        return this.descheduledJobInfo;
     }
 
     public Set<String> getScheduledJobIds(String indexName) {
@@ -81,6 +87,10 @@ public class JobScheduler {
             if (jobInfo == null) {
                 jobInfo = new JobSchedulingInfo(indexName, docId, scheduledJobParameter);
                 this.scheduledJobInfo.addJob(indexName, docId, jobInfo);
+
+                if (this.descheduledJobInfo.getJobInfo(indexName, docId) != null) {
+                    this.descheduledJobInfo.removeJob(indexName, docId);
+                }
             }
             if (jobInfo.getScheduledCancellable() != null) {
                 return true;
@@ -115,13 +125,14 @@ public class JobScheduler {
 
         log.info("Descheduling jobId: {}", id);
         jobInfo.setDescheduled(true);
-        jobInfo.setActualPreviousExecutionTime(null);
-        jobInfo.setExpectedPreviousExecutionTime(null);
+        // jobInfo.setActualPreviousExecutionTime(null);
+        // jobInfo.setExpectedPreviousExecutionTime(null);
         Scheduler.ScheduledCancellable scheduledCancellable = jobInfo.getScheduledCancellable();
 
         if (scheduledCancellable != null && !scheduledCancellable.cancel()) {
             return false;
         }
+        this.descheduledJobInfo.addJob(indexName, id, jobInfo);
         this.scheduledJobInfo.removeJob(indexName, id);
 
         return true;

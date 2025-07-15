@@ -12,6 +12,7 @@ import org.opensearch.common.lifecycle.LifecycleListener;
 import org.opensearch.jobscheduler.JobSchedulerSettings;
 import org.opensearch.jobscheduler.ScheduledJobProvider;
 import org.opensearch.jobscheduler.scheduler.JobScheduler;
+import org.opensearch.jobscheduler.scheduler.JobSchedulingInfo;
 import org.opensearch.jobscheduler.spi.LockModel;
 import org.opensearch.jobscheduler.spi.ScheduledJobParameter;
 import org.opensearch.jobscheduler.spi.ScheduledJobRunner;
@@ -265,6 +266,14 @@ public class JobSweeper extends LifecycleListener implements IndexingOperationLi
                         return null;
                     }
                     ScheduledJobRunner jobRunner = this.indexToProviders.get(shardId.getIndexName()).getJobRunner();
+
+                    this.scheduler.getDescheduledJobInfo()
+                        .addDescheduledJob(
+                            shardId.getIndexName(),
+                            docId,
+                            new JobSchedulingInfo(shardId.getIndexName(), docId, jobParameter)
+                        );
+
                     if (jobParameter.isEnabled()) {
                         this.scheduler.schedule(shardId.getIndexName(), docId, jobParameter, jobRunner, jobDocVersion, jitterLimit);
                     }
