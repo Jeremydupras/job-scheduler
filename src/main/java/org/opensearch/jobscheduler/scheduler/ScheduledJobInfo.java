@@ -48,6 +48,18 @@ public class ScheduledJobInfo {
         this.jobInfoMap.get(indexName).put(jobId, jobInfo);
     }
 
+    public void addDescheduledJob(String indexName, String jobId, JobSchedulingInfo jobInfo) {
+        if (this.jobInfoMap.containsKey(indexName)) {
+            synchronized (this.jobInfoMap) {
+                if (!this.jobInfoMap.containsKey(indexName)) {
+                    jobInfoMap.put(indexName, new ConcurrentHashMap<>());
+                } else {
+                    this.jobInfoMap.get(indexName).get(jobId).setJobParameter(jobInfo.getJobParameter());
+                }
+            }
+        }
+    }
+
     public Map<String, Map<String, JobSchedulingInfo>> getJobInfoMap() {
         return Map.copyOf(jobInfoMap);
     }
