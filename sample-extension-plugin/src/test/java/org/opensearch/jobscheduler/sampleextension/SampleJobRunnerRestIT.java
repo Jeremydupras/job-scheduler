@@ -84,6 +84,41 @@ public class SampleJobRunnerRestIT extends SampleExtensionIntegTestCase {
         Assert.assertEquals(1, actualCount);
     }
 
+    public void testJobRunThenDisable() throws Exception {
+        String index = createTestIndex();
+        SampleJobParameter jobParameter = new SampleJobParameter();
+        jobParameter.setJobName("sample-job-it");
+        jobParameter.setIndexToWatch(index);
+        jobParameter.setSchedule(new IntervalSchedule(Instant.now(), 5, ChronoUnit.SECONDS));
+        jobParameter.setLockDurationSeconds(5L);
+
+        // Creates a new watcher job.
+        String jobId = OpenSearchRestTestCase.randomAlphaOfLength(10);
+        SampleJobParameter schedJobParameter = createWatcherJob(jobId, jobParameter);
+
+        waitUntilLockIsAcquiredAndReleased(jobId);
+
+        // wait till the job runner runs for the first time after 5s & inserts a record into the watched index & then delete the job.
+        disableWatcherJob(jobId, jobParameter);
+
+        // ensure log remains released as job is now descheduled
+        assertThrows(
+            ConditionTimeoutException.class,
+            () -> await().atMost(10, TimeUnit.SECONDS).pollInterval(1, TimeUnit.SECONDS).ignoreExceptions().until(() -> {
+                LockModel lock = getLockByJobId(jobId);
+                if (lock != null && !lock.isReleased()) {
+                    Assert.fail("Lock should not be acquired after job deletion");
+                }
+                return false;
+            })
+        );
+
+        long actualCount = countRecordsInTestIndex(index);
+
+        // Asserts that in the last 10s, no new job ran to insert a record into the watched index & all locks are deleted for the job.
+        Assert.assertEquals(1, actualCount);
+    }
+
     public void testJobUpdateWithRescheduleJob() throws Exception {
         String index = createTestIndex();
         SampleJobParameter jobParameter = new SampleJobParameter();
@@ -287,18 +322,25 @@ public class SampleJobRunnerRestIT extends SampleExtensionIntegTestCase {
     }
 
     // navigates to released property in lock
+    @SuppressWarnings("unchecked")
     Function<Map<String, Object>, Boolean> navigationFunctionByNode = (responseJson) -> {
         List<Map<String, Object>> nodes = (List<Map<String, Object>>) responseJson.get("nodes");
-        Map<String, Object> node = nodes.get(0);
-        Map<String, Object> scheduled_job_info = (Map<String, Object>) node.get("scheduled_job_info");
-        List<Map<String, Object>> jobs = (List<Map<String, Object>>) scheduled_job_info.get("jobs");
-        Map<String, Object> job = jobs.get(0);
-        List<Object> lockProperties = (List<Object>) job.get("lock");
-        Map<String, Object> lockMap = (Map<String, Object>) lockProperties.get(0);
-        return (boolean) lockMap.get("released");
+        for (Map<String, Object> node : nodes) {
+            List<Map<String, Object>> nodeJobs = (List<Map<String, Object>>) ((Map<String, Object>) node.get("scheduled_job_info")).get(
+                "jobs"
+            );
+            if (!nodeJobs.isEmpty()) {
+                Map<String, Object> job = nodeJobs.get(0);
+                List<Object> lockProperties = (List<Object>) job.get("lock");
+                Map<String, Object> lockMap = (Map<String, Object>) lockProperties.get(0);
+                return (boolean) lockMap.get("released");
+            }
+        }
+        return null;
     };
 
     // navigates to released property in lock
+    @SuppressWarnings("unchecked")
     Function<Map<String, Object>, Boolean> navigationFunctionEntireCuster = (responseJson) -> {
         List<Map<String, Object>> jobs = (List<Map<String, Object>>) responseJson.get("jobs");
         Map<String, Object> job = jobs.get(0);
