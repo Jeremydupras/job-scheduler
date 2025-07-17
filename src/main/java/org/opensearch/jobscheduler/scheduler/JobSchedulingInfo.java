@@ -30,10 +30,6 @@ public class JobSchedulingInfo {
         this.jobParameter = jobParameter;
     }
 
-    public void setJobParameter(ScheduledJobParameter jobParameter) {
-        this.jobParameter = jobParameter;
-    }
-
     public String getIndexName() {
         return indexName;
     }
