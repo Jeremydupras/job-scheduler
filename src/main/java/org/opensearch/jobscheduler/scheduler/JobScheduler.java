@@ -138,6 +138,10 @@ public class JobScheduler {
         return true;
     }
 
+    public void deleteFromDescheduledJobs(String indexName, String docId) {
+        this.descheduledJobInfo.removeJob(indexName, docId);
+    }
+
     @VisibleForTesting
     boolean reschedule(
         ScheduledJobParameter jobParameter,

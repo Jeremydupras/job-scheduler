@@ -68,14 +68,14 @@ public class SampleJobRunnerRestIT extends SampleExtensionIntegTestCase {
 
         // ensure log remains released as job is now descheduled
         assertThrows(
-                ConditionTimeoutException.class,
-                () -> await().atMost(10, TimeUnit.SECONDS).pollInterval(1, TimeUnit.SECONDS).ignoreExceptions().until(() -> {
-                    LockModel lock = getLockByJobId(jobId);
-                    if (lock != null && !lock.isReleased()) {
-                        Assert.fail("Lock should not be acquired after job deletion");
-                    }
-                    return false;
-                })
+            ConditionTimeoutException.class,
+            () -> await().atMost(10, TimeUnit.SECONDS).pollInterval(1, TimeUnit.SECONDS).ignoreExceptions().until(() -> {
+                LockModel lock = getLockByJobId(jobId);
+                if (lock != null && !lock.isReleased()) {
+                    Assert.fail("Lock should not be acquired after job deletion");
+                }
+                return false;
+            })
         );
 
         long actualCount = countRecordsInTestIndex(index);
@@ -103,14 +103,14 @@ public class SampleJobRunnerRestIT extends SampleExtensionIntegTestCase {
 
         // ensure log remains released as job is now descheduled
         assertThrows(
-                ConditionTimeoutException.class,
-                () -> await().atMost(10, TimeUnit.SECONDS).pollInterval(1, TimeUnit.SECONDS).ignoreExceptions().until(() -> {
-                    LockModel lock = getLockByJobId(jobId);
-                    if (lock != null && !lock.isReleased()) {
-                        Assert.fail("Lock should not be acquired after job deletion");
-                    }
-                    return false;
-                })
+            ConditionTimeoutException.class,
+            () -> await().atMost(10, TimeUnit.SECONDS).pollInterval(1, TimeUnit.SECONDS).ignoreExceptions().until(() -> {
+                LockModel lock = getLockByJobId(jobId);
+                if (lock != null && !lock.isReleased()) {
+                    Assert.fail("Lock should not be acquired after job deletion");
+                }
+                return false;
+            })
         );
 
         long actualCount = countRecordsInTestIndex(index);
@@ -182,9 +182,9 @@ public class SampleJobRunnerRestIT extends SampleExtensionIntegTestCase {
 
         Response response = makeRequest(client(), "GET", SCHEDULER_INFO_URI, Map.of(), null);
         Map<String, Object> responseJson = JsonXContent.jsonXContent.createParser(
-                NamedXContentRegistry.EMPTY,
-                LoggingDeprecationHandler.INSTANCE,
-                response.getEntity().getContent()
+            NamedXContentRegistry.EMPTY,
+            LoggingDeprecationHandler.INSTANCE,
+            response.getEntity().getContent()
         ).map();
 
         List<Map<String, Object>> nodes = (List<Map<String, Object>>) responseJson.get("nodes");
@@ -244,9 +244,9 @@ public class SampleJobRunnerRestIT extends SampleExtensionIntegTestCase {
         // Checks lock is released
         Response response = makeRequest(client(), "GET", SCHEDULER_INFO_URI, Map.of(), null);
         Map<String, Object> responseJson = JsonXContent.jsonXContent.createParser(
-                NamedXContentRegistry.EMPTY,
-                LoggingDeprecationHandler.INSTANCE,
-                response.getEntity().getContent()
+            NamedXContentRegistry.EMPTY,
+            LoggingDeprecationHandler.INSTANCE,
+            response.getEntity().getContent()
         ).map();
 
         // Asserts that "released" is true
@@ -274,9 +274,9 @@ public class SampleJobRunnerRestIT extends SampleExtensionIntegTestCase {
         // Checks lock is released
         Response response = makeRequest(client(), "GET", SCHEDULER_INFO_URI, Map.of(), null);
         Map<String, Object> responseJson = JsonXContent.jsonXContent.createParser(
-                NamedXContentRegistry.EMPTY,
-                LoggingDeprecationHandler.INSTANCE,
-                response.getEntity().getContent()
+            NamedXContentRegistry.EMPTY,
+            LoggingDeprecationHandler.INSTANCE,
+            response.getEntity().getContent()
         ).map();
 
         // Asserts that "released" is true
@@ -285,10 +285,10 @@ public class SampleJobRunnerRestIT extends SampleExtensionIntegTestCase {
     }
 
     protected void waitUntilLockIsAcquiredAndReleasedTransportCall(
-            String jobId,
-            int maxTimeInSec,
-            String SCHEDULER_INFO_URI,
-            Function<Map<String, Object>, Boolean> navigationFunction
+        String jobId,
+        int maxTimeInSec,
+        String SCHEDULER_INFO_URI,
+        Function<Map<String, Object>, Boolean> navigationFunction
     ) throws IOException, InterruptedException {
         AtomicLong prevLockAcquiredTime = new AtomicLong(0L);
         AtomicReference<LockModel> lock = new AtomicReference<>();
@@ -307,9 +307,9 @@ public class SampleJobRunnerRestIT extends SampleExtensionIntegTestCase {
 
         Response response = makeRequest(client(), "GET", SCHEDULER_INFO_URI, Map.of(), null);
         Map<String, Object> responseJson = JsonXContent.jsonXContent.createParser(
-                NamedXContentRegistry.EMPTY,
-                LoggingDeprecationHandler.INSTANCE,
-                response.getEntity().getContent()
+            NamedXContentRegistry.EMPTY,
+            LoggingDeprecationHandler.INSTANCE,
+            response.getEntity().getContent()
         ).map();
 
         // Asserts that "released" is false
@@ -327,7 +327,7 @@ public class SampleJobRunnerRestIT extends SampleExtensionIntegTestCase {
         List<Map<String, Object>> nodes = (List<Map<String, Object>>) responseJson.get("nodes");
         for (Map<String, Object> node : nodes) {
             List<Map<String, Object>> nodeJobs = (List<Map<String, Object>>) ((Map<String, Object>) node.get("scheduled_job_info")).get(
-                    "jobs"
+                "jobs"
             );
             if (!nodeJobs.isEmpty()) {
                 Map<String, Object> job = nodeJobs.get(0);

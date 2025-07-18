@@ -281,28 +281,28 @@ public class TransportGetScheduledInfoAction extends TransportNodesAction<
                 }
 
                 // Add lock information
-                CountDownLatch latch = new CountDownLatch(1);
-                AtomicReference<List<Map<String, Object>>> lockRef = new AtomicReference<>();
+                    CountDownLatch latch = new CountDownLatch(1);
+                    AtomicReference<List<Map<String, Object>>> lockRef = new AtomicReference<>();
 
-                findLockByJobId(jobId, ActionListener.wrap(lock -> {
-                    lockRef.set(lock);
-                    latch.countDown();
-                }, e -> {
-                    log.error("Failed to get lock for job {}", jobId, e);
-                    lockRef.set(new ArrayList<>());
-                    latch.countDown();
-                }));
+                    findLockByJobId(jobId, ActionListener.wrap(lock -> {
+                        lockRef.set(lock);
+                        latch.countDown();
+                    }, e -> {
+                        log.error("Failed to get lock for job {}", jobId, e);
+                        lockRef.set(new ArrayList<>());
+                        latch.countDown();
+                    }));
 
-                try {
-                    if (latch.await(5, TimeUnit.SECONDS)) {
-                        jobDetails.put("lock", lockRef.get());
-                    } else {
+                    try {
+                        if (latch.await(5, TimeUnit.SECONDS)) {
+                            jobDetails.put("lock", lockRef.get());
+                        } else {
+                            jobDetails.put("lock", new ArrayList<>());
+                        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
                         jobDetails.put("lock", new ArrayList<>());
                     }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    jobDetails.put("lock", new ArrayList<>());
-                }
 
                 // Add jitter
                 jobDetails.put("jitter", jobInfo.getJobParameter().getJitter() != null ? jobInfo.getJobParameter().getJitter() : "none");
