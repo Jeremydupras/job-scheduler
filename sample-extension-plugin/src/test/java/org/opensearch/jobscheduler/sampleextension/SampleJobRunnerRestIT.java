@@ -21,6 +21,7 @@ import org.opensearch.test.rest.OpenSearchRestTestCase;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.awaitility.Awaitility.await;
@@ -47,6 +48,7 @@ public class SampleJobRunnerRestIT extends SampleExtensionIntegTestCase {
         Assert.assertEquals(jobParameter.getName(), schedJobParameter.getName());
         Assert.assertEquals(jobParameter.getIndexToWatch(), schedJobParameter.getIndexToWatch());
         Assert.assertEquals(jobParameter.getLockDurationSeconds(), schedJobParameter.getLockDurationSeconds());
+        deleteWatcherJob(jobId);
     }
 
     public void testJobDeleteWithDescheduleJob() throws Exception {
@@ -117,6 +119,7 @@ public class SampleJobRunnerRestIT extends SampleExtensionIntegTestCase {
 
         // Asserts that in the last 10s, no new job ran to insert a record into the watched index & all locks are deleted for the job.
         Assert.assertEquals(1, actualCount);
+        deleteWatcherJob(jobId);
     }
 
     public void testJobUpdateWithRescheduleJob() throws Exception {
@@ -147,11 +150,14 @@ public class SampleJobRunnerRestIT extends SampleExtensionIntegTestCase {
 
         // Asserts that the job runner no longer updates the old index as the job params have been updated.
         Assert.assertEquals(1, countRecordsInTestIndex(index));
+        deleteWatcherJob(jobId);
     }
 
     public void testRunThenListJobs() throws Exception {
 
         String SCHEDULER_INFO_URI = "/_plugins/_job_scheduler/api/jobs?by_node";
+
+        Set<String> jobIds = new java.util.HashSet<>();
 
         String index = createTestIndex();
         SampleJobParameter jobParameter = new SampleJobParameter();
@@ -171,11 +177,13 @@ public class SampleJobRunnerRestIT extends SampleExtensionIntegTestCase {
 
             String jobIdN = OpenSearchRestTestCase.randomAlphaOfLength(10);
             createWatcherJob(jobIdN, jobParameterN);
+            jobIds.add(jobIdN);
         }
 
         // Creates a new watcher job.
         String jobId = OpenSearchRestTestCase.randomAlphaOfLength(10);
         createWatcherJob(jobId, jobParameter);
+        jobIds.add(jobId);
 
         waitUntilLockIsAcquiredAndReleased(jobId);
         Assert.assertEquals(1, countRecordsInTestIndex(index));
@@ -192,6 +200,13 @@ public class SampleJobRunnerRestIT extends SampleExtensionIntegTestCase {
         assertEquals(11, responseJson.get("total_jobs"));
         assertEquals(0, ((List<?>) responseJson.get("failures")).size());
         assertFalse("Should have at least one node", nodes.isEmpty());
+
+        // Create a copy of the job IDs to avoid concurrent modification
+        Set<String> jobIdsCopy = new java.util.HashSet<>(jobIds);
+        for (String jobID : jobIdsCopy) {
+            deleteWatcherJob(jobID);
+        }
+        jobIds.clear();
     }
 
     public void testAcquiredLockPreventExecOfTasks() throws Exception {
@@ -222,6 +237,7 @@ public class SampleJobRunnerRestIT extends SampleExtensionIntegTestCase {
 
         waitUntilLockIsAcquiredAndReleased(jobId);
         Assert.assertEquals(2, countRecordsInTestIndex(index));
+        deleteWatcherJob(jobId);
     }
 
     public void testActiveLockResponseInScheduledInfoByNode() throws Exception {
@@ -251,6 +267,7 @@ public class SampleJobRunnerRestIT extends SampleExtensionIntegTestCase {
 
         // Asserts that "released" is true
         assertTrue(navigationFunctionByNode.apply(responseJson));
+        deleteWatcherJob(jobId);
 
     }
 
@@ -281,6 +298,7 @@ public class SampleJobRunnerRestIT extends SampleExtensionIntegTestCase {
 
         // Asserts that "released" is true
         assertTrue(navigationFunctionEntireCuster.apply(responseJson));
+        deleteWatcherJob(jobId);
 
     }
 

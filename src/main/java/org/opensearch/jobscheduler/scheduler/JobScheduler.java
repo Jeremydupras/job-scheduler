@@ -39,14 +39,12 @@ public class JobScheduler {
 
     private ThreadPool threadPool;
     private ScheduledJobInfo scheduledJobInfo;
-    private ScheduledJobInfo descheduledJobInfo;
     private Clock clock;
     private final LockService lockService;
 
     public JobScheduler(ThreadPool threadPool, final LockService lockService) {
         this.threadPool = threadPool;
         this.scheduledJobInfo = new ScheduledJobInfo();
-        this.descheduledJobInfo = new ScheduledJobInfo();
         this.clock = Clock.systemDefaultZone();
         this.lockService = lockService;
     }
@@ -63,10 +61,6 @@ public class JobScheduler {
 
     public Set<String> getScheduledJobIds(String indexName) {
         return this.scheduledJobInfo.getJobsByIndex(indexName).keySet();
-    }
-
-    public ScheduledJobInfo getDescheduledJobInfo() {
-        return this.descheduledJobInfo;
     }
 
     public boolean schedule(
@@ -87,16 +81,42 @@ public class JobScheduler {
             if (jobInfo == null) {
                 jobInfo = new JobSchedulingInfo(indexName, docId, scheduledJobParameter);
                 this.scheduledJobInfo.addJob(indexName, docId, jobInfo);
-
-                if (this.descheduledJobInfo.getJobInfo(indexName, docId) != null) {
-                    this.descheduledJobInfo.removeJob(indexName, docId);
-                }
             }
             if (jobInfo.getScheduledCancellable() != null) {
                 return true;
             }
 
             this.reschedule(scheduledJobParameter, jobInfo, jobRunner, version, jitterLimit);
+        }
+
+        return true;
+    }
+
+    public boolean addDisabledjob(
+            String indexName,
+            String docId,
+            ScheduledJobParameter scheduledJobParameter,
+            ScheduledJobRunner jobRunner,
+            JobDocVersion version,
+            Double jitterLimit
+    ) {
+        if (scheduledJobParameter.isEnabled()) {
+            return false;
+        }
+        log.info("Adding disabled job id {} for index {} .", docId, indexName);
+        JobSchedulingInfo jobInfo;
+        synchronized (this.scheduledJobInfo.getDisabledJobsByIndex(indexName)) {
+            jobInfo = this.scheduledJobInfo.getDisabledJobInfo(indexName, docId);
+            if (jobInfo == null) {
+                jobInfo = new JobSchedulingInfo(indexName, docId, scheduledJobParameter);
+                jobInfo.setDescheduled(true);
+                this.scheduledJobInfo.addDisabledJob(indexName, docId, jobInfo);
+            }
+            if (jobInfo.getScheduledCancellable() != null) {
+                return true;
+            }
+
+            // this.reschedule(scheduledJobParameter, jobInfo, jobRunner, version, jitterLimit);
         }
 
         return true;
@@ -125,21 +145,16 @@ public class JobScheduler {
 
         log.info("Descheduling jobId: {}", id);
         jobInfo.setDescheduled(true);
-        // jobInfo.setActualPreviousExecutionTime(null);
-        // jobInfo.setExpectedPreviousExecutionTime(null);
+        jobInfo.setActualPreviousExecutionTime(null);
+        jobInfo.setExpectedPreviousExecutionTime(null);
         Scheduler.ScheduledCancellable scheduledCancellable = jobInfo.getScheduledCancellable();
 
         if (scheduledCancellable != null && !scheduledCancellable.cancel()) {
             return false;
         }
-        this.descheduledJobInfo.addJob(indexName, id, jobInfo);
         this.scheduledJobInfo.removeJob(indexName, id);
 
         return true;
-    }
-
-    public void deleteFromDescheduledJobs(String indexName, String docId) {
-        this.descheduledJobInfo.removeJob(indexName, docId);
     }
 
     @VisibleForTesting

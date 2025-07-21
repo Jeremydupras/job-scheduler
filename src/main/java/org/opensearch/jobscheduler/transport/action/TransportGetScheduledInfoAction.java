@@ -22,7 +22,6 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.jobscheduler.ScheduledJobProvider;
 import org.opensearch.jobscheduler.scheduler.JobScheduler;
 import org.opensearch.jobscheduler.scheduler.JobSchedulingInfo;
-import org.opensearch.jobscheduler.scheduler.ScheduledJobInfo;
 import org.opensearch.jobscheduler.spi.schedule.CronSchedule;
 import org.opensearch.jobscheduler.spi.schedule.IntervalSchedule;
 import org.opensearch.jobscheduler.utils.JobDetailsService;
@@ -158,8 +157,8 @@ public class TransportGetScheduledInfoAction extends TransportNodesAction<
 
             // Get scheduled job information from the job scheduler
             if (jobScheduler != null) {
-                processJobInfo(jobs, jobScheduler.getScheduledJobInfo(), indexToJobProvider, false);
-                processJobInfo(jobs, jobScheduler.getDescheduledJobInfo(), indexToJobProvider, true);
+                processJobInfo(jobs, jobScheduler.getScheduledJobInfo().getJobInfoMap(), indexToJobProvider);
+                processJobInfo(jobs, jobScheduler.getScheduledJobInfo().getDisabledJobInfoMap(), indexToJobProvider);
             }
 
             // Add jobs list and total count
@@ -177,15 +176,14 @@ public class TransportGetScheduledInfoAction extends TransportNodesAction<
 
     private void processJobInfo(
         List<Map<String, Object>> jobs,
-        ScheduledJobInfo jobInfoList,
-        Map<String, ScheduledJobProvider> indexToJobProvider,
-        boolean isDescheduled
+        Map<String, Map<String, JobSchedulingInfo>> jobInfoMap,
+        Map<String, ScheduledJobProvider> indexToJobProvider
     ) {
-        if (jobInfoList == null || jobInfoList.getJobInfoMap() == null) {
+        if (jobInfoMap == null) {
             return;
         }
 
-        for (Map.Entry<String, Map<String, JobSchedulingInfo>> indexEntry : jobInfoList.getJobInfoMap().entrySet()) {
+        for (Map.Entry<String, Map<String, JobSchedulingInfo>> indexEntry : jobInfoMap.entrySet()) {
             String indexName = indexEntry.getKey();
             Map<String, JobSchedulingInfo> jobsMap = indexEntry.getValue();
 
@@ -210,7 +208,7 @@ public class TransportGetScheduledInfoAction extends TransportNodesAction<
                 jobDetails.put("job_id", jobId);
                 jobDetails.put("index_name", indexName);
                 jobDetails.put("name", jobInfo.getJobParameter().getName());
-                jobDetails.put("descheduled", isDescheduled || jobInfo.isDescheduled());
+                jobDetails.put("descheduled", jobInfo.isDescheduled());
                 jobDetails.put("enabled", jobInfo.getJobParameter().isEnabled());
 
                 if (jobInfo.getJobParameter().getEnabledTime() != null) {
@@ -281,28 +279,28 @@ public class TransportGetScheduledInfoAction extends TransportNodesAction<
                 }
 
                 // Add lock information
-                    CountDownLatch latch = new CountDownLatch(1);
-                    AtomicReference<List<Map<String, Object>>> lockRef = new AtomicReference<>();
+                CountDownLatch latch = new CountDownLatch(1);
+                AtomicReference<List<Map<String, Object>>> lockRef = new AtomicReference<>();
 
-                    findLockByJobId(jobId, ActionListener.wrap(lock -> {
-                        lockRef.set(lock);
-                        latch.countDown();
-                    }, e -> {
-                        log.error("Failed to get lock for job {}", jobId, e);
-                        lockRef.set(new ArrayList<>());
-                        latch.countDown();
-                    }));
+                findLockByJobId(jobId, ActionListener.wrap(lock -> {
+                    lockRef.set(lock);
+                    latch.countDown();
+                }, e -> {
+                    log.error("Failed to get lock for job {}", jobId, e);
+                    lockRef.set(new ArrayList<>());
+                    latch.countDown();
+                }));
 
-                    try {
-                        if (latch.await(5, TimeUnit.SECONDS)) {
-                            jobDetails.put("lock", lockRef.get());
-                        } else {
-                            jobDetails.put("lock", new ArrayList<>());
-                        }
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
+                try {
+                    if (latch.await(5, TimeUnit.SECONDS)) {
+                        jobDetails.put("lock", lockRef.get());
+                    } else {
                         jobDetails.put("lock", new ArrayList<>());
                     }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    jobDetails.put("lock", new ArrayList<>());
+                }
 
                 // Add jitter
                 jobDetails.put("jitter", jobInfo.getJobParameter().getJitter() != null ? jobInfo.getJobParameter().getJitter() : "none");

@@ -16,9 +16,11 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class ScheduledJobInfo {
     private Map<String, Map<String, JobSchedulingInfo>> jobInfoMap;
+    private Map<String, Map<String, JobSchedulingInfo>> disabledJobInfoMap;
 
     ScheduledJobInfo() {
         this.jobInfoMap = new ConcurrentHashMap<>();
+        this.disabledJobInfoMap = new ConcurrentHashMap<>();
     }
 
     public Map<String, JobSchedulingInfo> getJobsByIndex(String indexName) {
@@ -32,8 +34,23 @@ public class ScheduledJobInfo {
         return this.jobInfoMap.get(indexName);
     }
 
+    public Map<String, JobSchedulingInfo> getDisabledJobsByIndex(String indexName) {
+        if (!this.disabledJobInfoMap.containsKey(indexName)) {
+            synchronized (this.disabledJobInfoMap) {
+                if (!this.disabledJobInfoMap.containsKey(indexName)) {
+                    this.disabledJobInfoMap.put(indexName, new ConcurrentHashMap<>());
+                }
+            }
+        }
+        return this.disabledJobInfoMap.get(indexName);
+    }
+
     public JobSchedulingInfo getJobInfo(String indexName, String jobId) {
         return getJobsByIndex(indexName).get(jobId);
+    }
+
+    public JobSchedulingInfo getDisabledJobInfo(String indexName, String jobId) {
+        return getDisabledJobsByIndex(indexName).get(jobId);
     }
 
     public void addJob(String indexName, String jobId, JobSchedulingInfo jobInfo) {
@@ -46,27 +63,44 @@ public class ScheduledJobInfo {
         }
 
         this.jobInfoMap.get(indexName).put(jobId, jobInfo);
+
+        if (this.disabledJobInfoMap.containsKey(indexName)) {
+            removeDisabledJob(indexName, jobId);
+        }
     }
 
-    public void addDescheduledJob(String indexName, String jobId, JobSchedulingInfo jobInfo) {
-        if (this.jobInfoMap.containsKey(indexName)) {
-            synchronized (this.jobInfoMap) {
-                if (!this.jobInfoMap.containsKey(indexName)) {
-                    jobInfoMap.put(indexName, new ConcurrentHashMap<>());
-                } else {
-                    this.jobInfoMap.get(indexName).get(jobId).setJobParameter(jobInfo.getJobParameter());
+    public void addDisabledJob(String indexName, String jobId, JobSchedulingInfo jobInfo) {
+        if (!this.disabledJobInfoMap.containsKey(indexName)) {
+            synchronized (this.disabledJobInfoMap) {
+                if (!this.disabledJobInfoMap.containsKey(indexName)) {
+                    disabledJobInfoMap.put(indexName, new ConcurrentHashMap<>());
                 }
             }
         }
+
+        this.disabledJobInfoMap.get(indexName).put(jobId, jobInfo);
     }
 
     public Map<String, Map<String, JobSchedulingInfo>> getJobInfoMap() {
         return Map.copyOf(jobInfoMap);
     }
 
+    public Map<String, Map<String, JobSchedulingInfo>> getDisabledJobInfoMap() {
+        return Map.copyOf(disabledJobInfoMap);
+    }
+
     public JobSchedulingInfo removeJob(String indexName, String jobId) {
         if (this.jobInfoMap.containsKey(indexName)) {
+            // addDisabledJob(indexName, jobId, this.jobInfoMap.get(indexName).get(jobId));
             return this.jobInfoMap.get(indexName).remove(jobId);
+        }
+
+        return null;
+    }
+
+    public JobSchedulingInfo removeDisabledJob(String indexName, String jobId) {
+        if (this.disabledJobInfoMap.containsKey(indexName)) {
+            return this.disabledJobInfoMap.get(indexName).remove(jobId);
         }
 
         return null;
